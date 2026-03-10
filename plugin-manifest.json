@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "pluginId": "sgp4-propagator",
+  "pluginType": "propagator",
+  "vendorId": "the-lobsternaut",
+  "name": "SGP4 Propagator Plugin",
+  "version": "0.1.0",
+  "description": "SGP4/SDP4 orbital propagator — takes GP/OMM elements, outputs OEM ephemeris. Supports integer NORAD IDs (no TLE text limit) via direct GP→SGP4 path.",
+  "license": "Apache-2.0",
+  "capabilities": {
+    "parse": true,
+    "convert": true,
+    "process": true,
+    "streaming": false
+  },
+  "ports": {
+    "inputs": [
+      {
+        "name": "gp_data",
+        "description": "GP/OMM orbital elements (CelesTrak JSON format)",
+        "schema": "OMM",
+        "required": true
+      },
+      {
+        "name": "config",
+        "description": "Propagation configuration (time range, step size)",
+        "schema": "PropagatorConfig",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "ephemeris",
+        "description": "Propagated ephemeris in OEM format",
+        "schema": "OEM",
+        "fileId": "$OEM"
+      }
+    ]
+  },
+  "dependencies": {
+    "sgp4": {
+      "source": "https://github.com/dnwrnr/sgp4.git",
+      "license": "Apache-2.0",
+      "version": "HEAD"
+    }
+  },
+  "wasm": {
+    "exportName": "SGP4_WASM",
+    "initialMemoryMB": 16,
+    "maxMemoryMB": 128
+  }
+}
