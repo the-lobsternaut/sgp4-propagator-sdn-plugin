@@ -1,90 +1,143 @@
-# SGP4 Propagator SDN Plugin
+# 🛰️ SGP4 Propagator Plugin
 
-SGP4/SDP4 orbit propagator for the [Space Data Network](https://github.com/the-lobsternaut/space-data-network). Takes GP/OMM elements (CelesTrak JSON format), propagates with the standard AFSPC analytical theory, and outputs OEM FlatBuffers.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/the-lobsternaut/sgp4-propagator-sdn-plugin/build.yml?branch=main&style=flat-square)](https://github.com/the-lobsternaut/sgp4-propagator-sdn-plugin/actions)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)](LICENSE)
+[![C++17](https://img.shields.io/badge/C%2B%2B-17-blue?style=flat-square)](https://en.cppreference.com/w/cpp/17)
+[![WASM](https://img.shields.io/badge/WASM-ready-blueviolet?style=flat-square)](wasm/)
+[![SDN Plugin](https://img.shields.io/badge/SDN-Plugin-orange?style=flat-square)](https://github.com/the-lobsternaut)
 
-## Features
+**SGP4/SDP4 orbital propagation — takes GP/OMM elements, outputs OEM FlatBuffer ephemeris. Supports integer NORAD IDs (no TLE text 5-digit limit) via direct GP→SGP4 path.**
 
-- **Two propagation paths**:
-  - GP JSON → direct `OrbitalElements` → SGP4 (integer NORAD IDs, no 5-digit limit)
-  - TLE text → SGP4 (legacy, Alpha-5 up to 339999)
-- **Batch propagation** — process entire GP catalogs in one call
-- **Point propagation** — single-epoch queries for CA/OD plugins
-- **OEM output** — spacedatastandards.org FlatBuffers (`$OEM` file identifier)
-- **WASM-ready** — Emscripten compilation for browser/Node.js
+---
 
-## Usage
+## Overview
 
-```cpp
-#include "sgp4_prop/propagator.h"
+The SGP4 Propagator is the workhorse orbit predictor for the Space Data Network. It implements the USAF Simplified General Perturbations model (SGP4 for LEO, SDP4 for deep space) for propagating Two-Line Element / General Perturbations data.
 
-// Parse CelesTrak GP JSON
-auto elements = sgp4_prop::parse_gp_json(json_string);
+### Key Features
 
-// Propagate to OEM
-sgp4_prop::PropagationConfig config;
-config.duration_days = 7.0;
-config.step_seconds = 60.0;
+- **GP/OMM JSON input** — direct ingestion from CelesTrak GP/OMM format (no TLE text parsing needed)
+- **Integer NORAD IDs** — supports catalog numbers > 99999 (beyond legacy 5-digit TLE limit)
+- **OEM FlatBuffer output** — CCSDS-compliant orbit ephemeris messages
+- **Batch propagation** — process entire catalogs (47,000+ objects)
+- **WASM** — full propagator in the browser with 16–128 MB memory
 
-auto states = sgp4_prop::propagate(elements[0], config);
-// states: vector of StateVector (epoch_jd, x, y, z, vx, vy, vz in TEME km/s)
+### SGP4 vs SDP4
 
-// Point propagation (fast single-epoch query)
-auto state = sgp4_prop::propagate_to_epoch(elements[0], target_jd);
+| Model | Regime | Period | Effects |
+|-------|--------|--------|---------|
+| SGP4 | Near-Earth | < 225 min | J2/J3/J4 secular + short-periodic |
+| SDP4 | Deep-space | ≥ 225 min | + Sun/Moon third-body resonances |
 
-// OEM FlatBuffer output
-uint8_t buffer[1024*1024];
-int32_t size = sgp4_prop::propagate_to_oem(elements[0], config, buffer, sizeof(buffer));
-// buffer contains $OEM FlatBuffer binary
+---
+
+## Architecture
+
+```mermaid
+graph LR
+    A["GP/OMM JSON<br/>(CelesTrak)"] --> B["GP Parser"]
+    C["TLE Text<br/>(2-line)"] --> D["TLE Parser"]
+    B --> E["SGP4/SDP4<br/>Propagator"]
+    D --> E
+    F["Config<br/>(start, stop, step)"] --> E
+    E --> G["OEM FlatBuffer<br/>($OEM)"]
+    E --> H["State Vectors<br/>(TEME/ECI)"]
 ```
 
-## Data Flow
+---
 
-```
-CelesTrak GP/OMM JSON ──→ parse_gp_json() ──→ GPElement
-                                                  │
-                                    propagate() / propagate_to_epoch()
-                                                  │
-                                                  ▼
-                                          StateVector (TEME)
-                                                  │
-                                      propagate_to_oem()
-                                                  │
-                                                  ▼
-                                        $OEM FlatBuffer binary
-```
+## Data Sources & APIs
 
-## GP Element Fields
+| Source | URL | Purpose |
+|--------|-----|---------|
+| **CelesTrak** | [celestrak.org/NORAD/elements/gp.php](https://celestrak.org/NORAD/elements/gp.php) | GP/OMM JSON elements |
+| **Space-Track** | [space-track.org](https://www.space-track.org/) | Official TLE/GP data |
 
-| Field | Type | Description |
-|---|---|---|
-| `norad_cat_id` | int | NORAD catalog ID (integer, no format limit) |
-| `mean_motion` | double | Mean motion (rev/day) |
-| `eccentricity` | double | Eccentricity |
-| `inclination` | double | Inclination (degrees) |
-| `ra_of_asc_node` | double | RAAN (degrees) |
-| `arg_of_pericenter` | double | Argument of perigee (degrees) |
-| `mean_anomaly` | double | Mean anomaly (degrees) |
-| `bstar` | double | B* drag term |
-| `epoch` | string | ISO 8601 epoch |
+---
 
-## Building
+## Research & References
+
+- Hoots, F. R. & Roehrich, R. L. (1980). "Models for Propagation of NORAD Element Sets." *Spacetrack Report No. 3*. The original SGP4 reference.
+- Vallado, D. A. et al. (2006). ["Revisiting Spacetrack Report #3"](https://doi.org/10.2514/6.2006-6753). AAS/AIAA. Modern SGP4 implementation reference.
+- Vallado, D. A. (2013). *Fundamentals of Astrodynamics and Applications*, 4th ed. Ch. 9 — SGP4 theory and implementation.
+- **CCSDS 502.0-B-3** — Orbit Data Messages (OEM format).
+
+---
+
+## Build Instructions
 
 ```bash
-cd src/cpp && mkdir -p build && cd build
-cmake ..
-make -j4
-./test_propagator
+git clone --recursive https://github.com/the-lobsternaut/sgp4-propagator-sdn-plugin.git
+cd sgp4-propagator-sdn-plugin
+
+mkdir -p build && cd build
+cmake ../src/cpp -DCMAKE_CXX_STANDARD=17
+make -j$(nproc) && ctest --output-on-failure
+
+# WASM build
+./build.sh
 ```
+
+---
+
+## Usage Examples
+
+### Propagate from GP/OMM JSON
+
+```cpp
+#include "sgp4_propagator/propagator.h"
+
+auto gp = sgp4::parseGPJSON(gp_json_string);
+
+sgp4::PropConfig config;
+config.startMinutes = 0;
+config.stopMinutes = 1440 * 7;  // 7 days
+config.stepMinutes = 1;
+
+auto ephemeris = sgp4::propagate(gp, config);
+// ephemeris → $OEM FlatBuffer
+```
+
+### WASM
+
+```javascript
+const sgp4 = await SGP4_WASM.create();
+const oem = sgp4.propagateGP(gpJson, startJD, 7.0, 60.0);
+```
+
+---
 
 ## Dependencies
 
-- [dnwrnr/sgp4](https://github.com/dnwrnr/sgp4) — C++ SGP4/SDP4 implementation (Apache-2.0)
-- [spacedatastandards.org](https://spacedatastandards.org) — OEM FlatBuffers schema
+| Dependency | Version | Purpose |
+|-----------|---------|---------|
+| C++17 | GCC 7+ / Clang 5+ | Core language |
+| [dnwrnr/sgp4](https://github.com/dnwrnr/sgp4) | HEAD | SGP4/SDP4 implementation |
+| FlatBuffers | Generated | OEM schema |
+| Emscripten | Latest | WASM build |
 
-## Coordinate System
+---
 
-Output states are in **TEME** (True Equator Mean Equinox), the native frame for SGP4. Units: km and km/s.
+## Plugin Manifest
+
+```json
+{
+  "schemaVersion": 1,
+  "pluginId": "sgp4-propagator",
+  "pluginType": "propagator",
+  "name": "SGP4 Propagator Plugin",
+  "version": "0.1.0",
+  "description": "SGP4/SDP4 propagator — GP/OMM to OEM FlatBuffer ephemeris.",
+  "license": "Apache-2.0",
+  "inputs": ["OMM", "TLE"],
+  "outputs": ["$OEM"]
+}
+```
+
+---
 
 ## License
 
-Apache-2.0
+Apache-2.0 — see [LICENSE](LICENSE) for details.
+
+*Part of the [Space Data Network](https://github.com/the-lobsternaut) plugin ecosystem.*
