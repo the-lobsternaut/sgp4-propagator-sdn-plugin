@@ -13,6 +13,7 @@ target_include_directories(sgp4 PUBLIC deps/sgp4/libsgp4)
 add_library(sgp4_prop STATIC
     src/gp_parser.cpp
     src/propagator.cpp
+    src/lambert_stm.cpp
 )
 target_include_directories(sgp4_prop PUBLIC include deps/sgp4/libsgp4)
 target_link_libraries(sgp4_prop sgp4)
@@ -21,3 +22,8 @@ target_link_libraries(sgp4_prop sgp4)
 add_executable(test_sgp4_prop tests/test_propagator.cpp)
 target_link_libraries(test_sgp4_prop sgp4_prop)
 target_include_directories(test_sgp4_prop PRIVATE include)
+
+# Lambert STM / Covariance tests
+add_executable(test_lambert_stm tests/test_lambert_stm.cpp)
+target_link_libraries(test_lambert_stm sgp4_prop)
+target_include_directories(test_lambert_stm PRIVATE include)
